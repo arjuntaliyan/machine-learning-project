@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            background-color: bisque;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            font-size: large;
+            padding-top: 50px;
+            opacity: 0; /* Initially hide the content */
+            animation: fade-in 1s ease-in-out forwards;
+        }
+        @keyframes fade-in {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+        .object-list {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .object-list-item {
+            padding: 10px;
+            margin: 0 10px;
+            background-color: #4CAF50;
+            color: white;
+            font-weight: bold;
+            border-radius: 5px;
+        }
+        #processing-indicator {
+            width: 10%;
+            height: 10px;
+            background-color: #4CAF50;
+            margin-top: 10px;
+            transition: width 2s linear;
+        }
+
+        .form-container {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .button,#show-result-button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin-top: 20px;
+            cursor: pointer;
+        }
+
+
+        #image-upload {
+            display: none;
+        }
+
+        #image-preview {
+            margin: 20px auto;
+            max-width: 400px;
+        }
+
+        #result-container {
+            display: none;
+            text-align: center;
+            margin-top: 5px;
+            font-size: 80px;
+        }
+
+        #result-text {
+            font-size: 50px;
+            font-weight: bold;
+        }
+
+        #progress-bar {
+            width: 100%;
+            background-color: #f2f2f2;
+            height: 20px;
+            margin-top: 20px;
+        }
+
+        #progress-bar-fill {
+            background-color: #4CAF50;
+            height: 100%;
+            width: 0;
+            transition: width 2s linear;
+        }
+        #image-container {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            margin-bottom: 20px;
+        }
+
+        #image-preview {
+            flex: 1;
+            margin-right: 20px;
+        }
+
+        #result-container {
+            flex: 1;
+            text-align: left;
+        }
+
+    </style>
+
+</head>
+<body>
+<div style="font-size: 30px;">Machine Learning Model</div>
+<div>
+    <p> This machine learning model identifies the object that the selected image contains.</p>
+</div>
+<div class="object-list">
+    <div class="object-list-item">Apple</div>
+    <div class="object-list-item">Banana</div>
+    <div class="object-list-item">Gun</div>
+    <div class="object-list-item">Ball</div>
+    <div class="object-list-item">Mobile</div>
+</div>
+<div class="form-container">
+    <label for="image-upload" class="button">Select Image</label>
+    <input type="file" id="image-upload" accept="image/*" />
+</div>
+
+<button id="show-result-button" onclick="showResult()">Show Result</button>
+<div id="loading-message">Loading the machine learning model...</div>
+
+<div id="processing-indicator"></div>
+<div id="progress-bar">
+    <div id="progress-bar-fill"></div>
+</div>
+<div id="image-container">
+    <div id="image-preview"></div>
+    <div id="result-container">
+        <p id="predicted-object"></p>
+    </div>
+</div>
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+<script type="text/javascript">
+    const URL = "./tm-my-image-model/";
+    let model, labelContainer, maxPredictions;
+
+    async function init() {
+        const modelURL = URL + "model.json";
+        const metadataURL = URL + "metadata.json";
+
+        // Show loading animation while the model is being loaded
+        showLoadingAnimation();
+
+        try {
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+
+            labelContainer = document.getElementById("predicted-object");
+
+            const imageUpload = document.getElementById("image-upload");
+            const imagePreview = document.getElementById("image-preview");
+
+            imageUpload.addEventListener("change", handleImageUpload);
+
+            function handleImageUpload(event) {
+                const file = event.target.files[0];
+                const reader = new FileReader();
+
+                reader.onload = function (e) {
+                    const img = document.createElement("img");
+                    img.src = e.target.result;
+                    img.width = 400;
+                    img.height = 400;
+                    imagePreview.innerHTML = "";
+                    imagePreview.appendChild(img);
+                };
+
+                reader.readAsDataURL(file);
+            }
+
+            const showResultButton = document.getElementById("show-result-button");
+            showResultButton.addEventListener("click", showResult);
+        } catch (error) {
+            handleModelError();
+        }
+    }
+
+    async function showResult() {
+        const imageElement = document.querySelector("#image-preview img");
+        if (!imageElement) {
+            return;
+        }
+
+        // Show processing animation and progress bar
+        showProcessingAnimation();
+        showProgressBar();
+
+        // Simulate processing delay
+        await delay(2000);
+
+        try {
+            const prediction = await model.predict(imageElement);
+            let maxProbability = 0;
+            let predictedObject = "";
+
+            for (let i = 0; i < maxPredictions; i++) {
+                const classPrediction = prediction[i].probability.toFixed(2);
+                if (classPrediction > maxProbability) {
+                    maxProbability = classPrediction;
+                    predictedObject = prediction[i].className;
+                }
+            }
+
+            // Hide processing animation and progress bar
+            hideProcessingAnimation();
+            hideProgressBar();
+
+            // Display the result
+            labelContainer.innerHTML = predictedObject;
+            document.getElementById("result-container").style.display = "block";
+
+            // Move the result container beside the image
+            const imageContainer = document.getElementById("image-container");
+            const resultContainer = document.getElementById("result-container");
+            resultContainer.style.marginLeft = "20px";
+            imageContainer.appendChild(resultContainer);
+        } catch (error) {
+            handleModelError();
+        }
+    }
+
+
+    function showLoadingAnimation() {
+        const processingIndicator = document.getElementById("processing-indicator");
+        const loadingMessage = document.getElementById("loading-message");
+
+        processingIndicator.style.width = "0%";
+        processingIndicator.style.backgroundColor = "#4CAF50";
+        loadingMessage.innerHTML = "Loading the machine learning model..."; // Set initial loading message
+
+        setTimeout(() => {
+            processingIndicator.style.width = "100%";
+            loadingMessage.innerHTML = "Model loaded completely"; // Change the loading message text
+            loadingMessage.style.display = "none";
+        }, 2000);
+    }
+
+    function showProcessingAnimation() {
+        const processingIndicator = document.getElementById("processing-indicator");
+        const loadingMessage = document.getElementById("loading-message");
+
+        processingIndicator.style.width = "0%";
+        processingIndicator.style.backgroundColor = "#4CAF50";
+        loadingMessage.style.display = "block";
+
+        setTimeout(() => {
+            processingIndicator.style.width = "100%";
+            loadingMessage.style.display = "none";
+        }, 2000);
+    }
+
+
+
+    function hideProcessingAnimation() {
+        const processingIndicator = document.getElementById("processing-indicator");
+        processingIndicator.style.width = "0%";
+    }
+
+    function showProgressBar() {
+        const progressBarFill = document.getElementById("progress-bar-fill");
+        progressBarFill.style.width = "0%";
+        setTimeout(() => {
+            progressBarFill.style.width = "100%";
+        }, 100);
+    }
+
+    function hideProgressBar() {
+        const progressBarFill = document.getElementById("progress-bar-fill");
+        progressBarFill.style.width = "0%";
+    }
+
+    function handleModelError() {
+        const processingIndicator = document.getElementById("processing-indicator");
+        processingIndicator.style.backgroundColor = "red";
+        processingIndicator.innerHTML = "Error loading the model";
+    }
+
+    function delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    init();
+</script>
+</body>
+</html>
